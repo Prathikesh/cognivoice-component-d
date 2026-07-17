@@ -1,15 +1,12 @@
 """EmoTa parser: Tamil emotional speech (Sri Lankan Tamil).
 
 936 wav utterances, 22 speakers, 5 emotions.
-Download: https://github.com/aaivu/EmoTa
-
-Note: the exact folder/filename layout must be checked after download.
-This parser handles the two common layouts: emotion subfolders, or
-emotion codes inside filenames. Adjust EMOTION_KEYWORDS if needed.
+Access: request form at https://rtuthaya.staff.uom.lk/contact-for-resources
+Filename convention (verified from the official loader):
+    <spkID>_<senID>_<emo>.wav   e.g. 19_18_ang.wav
 """
 
 import argparse
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -18,30 +15,26 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import EMOTION_VA, STRESSED_EMOTIONS, CALM_EMOTIONS, stress_from_va
 
-# keywords/codes that identify each emotion in paths or filenames
-EMOTION_KEYWORDS = {
-    "anger": ["anger", "angry", "ang"],
-    "happiness": ["happy", "happiness", "hap", "joy"],
-    "sadness": ["sad", "sadness"],
-    "fear": ["fear", "fearful", "fea"],
-    "neutral": ["neutral", "neu"],
+# 3-letter emotion codes used in EmoTa filenames -> our canonical names
+EMOTION_CODES = {
+    "ang": "anger",
+    "hap": "happiness",
+    "sad": "sadness",
+    "fea": "fear",
+    "neu": "neutral",
 }
 
 
-def detect_emotion(path: Path) -> str | None:
-    # check folder names first, then the filename itself
-    text = "/".join(p.lower() for p in path.parts)
-    for emotion, keys in EMOTION_KEYWORDS.items():
-        for k in keys:
-            if re.search(rf"(^|[/_\-\.]){k}([/_\-\.]|$)", text):
-                return emotion
-    return None
-
-
-def detect_speaker(path: Path) -> str:
-    # EmoTa encodes a speaker id; look for a number pattern in the filename
-    m = re.search(r"(?:spk|speaker|s)?[_\-]?(\d{1,2})[_\-]", path.name.lower())
-    return f"emota_{m.group(1)}" if m else f"emota_{path.parent.name}"
+def parse_filename(path: Path) -> tuple[str, str] | None:
+    """Return (speaker, emotion) from <spkID>_<senID>_<emo>.wav, else None."""
+    parts = path.stem.split("_")
+    if len(parts) != 3:
+        return None
+    spk_id, _, emo = parts
+    emotion = EMOTION_CODES.get(emo[:3].lower())
+    if emotion is None or not spk_id.isdigit():
+        return None
+    return f"emota_{int(spk_id)}", emotion
 
 
 def binary_stress_label(emotion: str) -> int:
@@ -56,15 +49,16 @@ def build_metadata(emota_root: Path, test_speaker_ratio: float = 0.2) -> pd.Data
     """Scan all wavs, label them, and make a speaker-independent split."""
     rows = []
     for wav in sorted(emota_root.rglob("*.wav")):
-        emotion = detect_emotion(wav)
-        if emotion is None:
+        parsed = parse_filename(wav)
+        if parsed is None:
             continue
+        speaker, emotion = parsed
         va = EMOTION_VA[emotion]
         rows.append({
             "path": str(wav),
             "dataset": "emota",
             "language": "ta",
-            "speaker": detect_speaker(wav),
+            "speaker": speaker,
             "emotion": emotion,
             "valence": va["valence"],
             "arousal": va["arousal"],
