@@ -1,0 +1,13 @@
+{
+  "id": "prathikesh1234/cognivoice-prepare-meld",
+  "title": "CogniVoice - prepare MELD wavs",
+  "code_file": "kaggle_prepare_meld.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
