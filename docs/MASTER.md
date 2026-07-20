@@ -217,8 +217,18 @@ have 5+ sessions; before that a global threshold is used (cold start).
 duration, HRV agreement, acoustic variance, ambient noise, session number, time
 of day, days since last session.
 
-**Output:** `{anomaly, severity, reasons, error, threshold, personalised}`
+**Output:** `{anomaly, anomaly_direction, severity, reasons, error, threshold, personalised}`
 (`reasons` names which features drove the anomaly — explainable.)
+
+**Why `anomaly_direction` exists:** reconstruction error alone cannot tell an
+unusually *good* session (a much bigger stress drop than normal) apart from an
+unusually *bad* one (stress rose sharply) — both just look like "far from
+normal" to the autoencoder. A wellness app must never present a user's best
+session as an alarming "severe anomaly", so the sign of `delta` resolves the
+direction: `unusual_improvement` (delta ≤ 0) or `unusual_worsening` (delta > 0),
+and `null` when the session is not anomalous at all. This was found and fixed
+after the first live end-to-end test flagged a genuinely strong improvement
+session (pre 8.76 → post 2.27) as "severe" with no way to tell it was good news.
 
 **Current status:** trained on **simulated** sessions (cold start), because real
 session history does not exist yet. It retrains on real data once sessions

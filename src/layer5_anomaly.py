@@ -17,6 +17,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import ANOMALY, ANOMALY_FEATURES
 
 N_FEATURES = len(ANOMALY_FEATURES)
+# Position of "delta" (post_stress - pre_stress) within the feature
+# vector, used below to tell an unusually GOOD session apart from an
+# unusually BAD one - the raw reconstruction error alone cannot.
+DELTA_INDEX = ANOMALY_FEATURES.index("delta")
 
 
 class SessionAutoencoder(nn.Module):
@@ -134,6 +138,21 @@ class SessionAnomalyDetector:
             top = np.argsort(per_dim)[::-1][:3]
             reasons = [ANOMALY_FEATURES[i] for i in top if per_dim[i] > error]
 
+        # Reconstruction error alone cannot tell an unusually GOOD session
+        # (a much bigger stress drop than normal) apart from an unusually
+        # BAD one (stress rose sharply) - both are simply "far from what
+        # the model has seen". A wellness app must not present a great
+        # session to the user as an alarming "severe anomaly", so the
+        # sign of delta (post_stress - pre_stress) resolves the direction:
+        # delta <= 0 means stress fell (an unusual IMPROVEMENT), delta > 0
+        # means stress rose (an unusual WORSENING that may warrant a
+        # gentle follow-up prompt in the app).
+        anomaly_direction = None
+        if is_anomalous:
+            delta_value = float(features[DELTA_INDEX])
+            anomaly_direction = ("unusual_improvement" if delta_value <= 0
+                                 else "unusual_worsening")
+
         # Only NORMAL sessions extend the user's baseline - otherwise one
         # anomaly would poison the personal threshold.
         if not is_anomalous:
@@ -141,6 +160,7 @@ class SessionAnomalyDetector:
 
         return {
             "anomaly": bool(is_anomalous),
+            "anomaly_direction": anomaly_direction,
             "severity": severity,
             "reasons": reasons,
             "error": round(error, 5),

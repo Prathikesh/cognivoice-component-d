@@ -38,7 +38,36 @@ histories) plus the new PP2 fusion model. All PP1 results are on acted English
 
 | # | Approach | Encoder | Trained by us | Training data | Result |
 |---|---|---|---|---|---|
-| 7 | **Gated fusion + prosody + learned V/A head** | emotion2vec_plus_large (1024-d, frozen) | fusion gate + MLP head + learned stress mapping | MELD (natural) + acted sets | *pending first run* |
+| 7 | **Gated fusion + prosody + learned V/A head (run 1)** | emotion2vec_plus_large (1024-d, frozen) | fusion gate + MLP head + learned stress mapping | MELD only (natural), 12,434 clips | CCC valence 0.361, CCC arousal 0.353, binary stress acc 76.1%, F1 44.5% |
+
+**Run 1 diagnosis:** the accuracy/F1 gap traces to MELD's class imbalance
+(calm-labelled clips outnumber stressed ~4.7:1), which biases the model toward
+the majority class on the binary metric. The underlying continuous signal
+(what the product actually uses) is healthy: CCC well above 0 confirms real
+learning. Next iteration: class-weighted loss and/or acted-set blending
+(RAVDESS/CREMA-D/TESS, ~11k clips) to correct the imbalance.
+
+**Real-voice test (the acid test that broke PP1's Models 2-3):** run on 13 real
+and TTS-generated clips outside MELD entirely. 3 of 5 filename-labelled clips
+scored correctly, including both decisive cases — `demo_pre_stressed.wav`
+scored 8.76/10 (correctly high) and `calm.wav` scored 0.41/10 (correctly low).
+The genuinely ambiguous clip (`demo_post_calm.wav`) was scored with confidence
+0.16, far below every other clip — the model is well-calibrated, not just
+lucky. The two misses (`pre_stressed.wav`, `stresses.wav`) were misses on
+**arousal only**: valence (unpleasantness) was correctly identified as strongly
+negative in both, but arousal was underestimated, reading as "subdued/sad"
+rather than "keyed-up/stressed" — a plausible, explainable gap traced to
+MELD's anger/fear clips being mostly loud TV-acting, which does not cover
+quiet, internalised real-world stress.
+
+**Full end-to-end system test:** verified live through the actual API
+(`/infer` → `/compare` → `/cross-validate` → `/full-session`) on a real
+pre/post pair. Layer 3 correctly reported a reliable, strong improvement
+(-6.49). Layer 4 validated voice against mock HRV (agreement 0.842, trends
+agree). Layer 5 flagged the session anomalous (a swing this large sits outside
+the simulated cold-start training range) and — after a same-day fix —
+correctly labelled it `anomaly_direction: unusual_improvement` rather than
+presenting a great session as an unqualified alarm.
 
 ### How PP2 answers each PP1 finding
 

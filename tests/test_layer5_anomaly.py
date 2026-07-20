@@ -54,10 +54,28 @@ def extreme_session():
                      500, 3.0, 200.0])
 
 
+def unusual_improvement_session():
+    """Every feature typical EXCEPT a much larger stress drop than any
+    simulated training example (delta -8.0; training caps improvement
+    at 5, i.e. delta never below -5). Mirrors the real /full-session
+    result observed live: pre 8.76 -> post 2.27, delta -6.49."""
+    return np.array([9.0, 1.0, -8.0, 0.8, 0.8, 15.0, 0.85, 0.2, 0.02,
+                     10, 14.0, 2.0])
+
+
+def unusual_worsening_session():
+    """Every feature typical EXCEPT stress rising sharply instead of
+    falling (delta +6.0; training data never has post_stress exceed
+    pre_stress by more than ~1 point)."""
+    return np.array([3.0, 9.0, 6.0, 0.8, 0.8, 15.0, 0.85, 0.2, 0.02,
+                     10, 14.0, 2.0])
+
+
 def test_normal_session_passes(checkpoint):
     det = SessionAnomalyDetector(checkpoint)
     r = det.check("user1", normal_session())
     assert not r["anomaly"] and r["severity"] == "none"
+    assert r["anomaly_direction"] is None   # no direction when not anomalous
 
 
 def test_extreme_session_flags(checkpoint):
@@ -66,6 +84,27 @@ def test_extreme_session_flags(checkpoint):
     assert r["anomaly"]
     assert r["severity"] in ("mild", "moderate", "severe")
     assert len(r["reasons"]) >= 1   # explainability: reasons must be named
+    # delta = 9.9 (post >> pre): stress rose, so this must read as worsening
+    assert r["anomaly_direction"] == "unusual_worsening"
+
+
+def test_unusual_improvement_labelled_correctly(checkpoint):
+    """A session outside the model's experience purely because the
+    IMPROVEMENT was unusually large must never be labelled a worsening -
+    a wellness app must not alarm a user after their best session."""
+    det = SessionAnomalyDetector(checkpoint)
+    r = det.check("user_improve", unusual_improvement_session())
+    assert r["anomaly"], "expected this out-of-distribution delta to flag"
+    assert r["anomaly_direction"] == "unusual_improvement"
+
+
+def test_unusual_worsening_labelled_correctly(checkpoint):
+    """The mirror case: stress rising far more than the model has ever
+    seen must be labelled a worsening, not silently called improvement."""
+    det = SessionAnomalyDetector(checkpoint)
+    r = det.check("user_worsen", unusual_worsening_session())
+    assert r["anomaly"], "expected this out-of-distribution delta to flag"
+    assert r["anomaly_direction"] == "unusual_worsening"
 
 
 def test_threshold_personalises_after_history(checkpoint):
