@@ -74,22 +74,35 @@ That head is *our* contribution — trained, not a lookup table.
 ## 4. The five layers, explained one by one
 
 ### LAYER 1 — Ambient / quality gate
-**File:** `src/layer1_ambient.py` · **Trained model?** No — pure DSP rules.
+**File:** `src/layer1_quality.py` · **Uses a frozen pretrained model (Silero VAD),
+plus DSP rules. Nothing trained by us here.**
 
-**Job:** reject bad audio before it wastes the model's time or corrupts results.
-A VR headset mic in a noisy room produces garbage; we catch it here.
+**Job:** reject bad audio before it reaches Layer 2. A VR headset mic in a noisy
+room, or someone talking in the background during the "stay silent" step,
+produces garbage; we catch it here.
 
-**How it works:** it measures five things and fails the clip if any is out of range:
-- **RMS energy** — too quiet means no speech; too loud means mic overload.
-- **Clipping ratio** — fraction of samples pinned at maximum (distortion).
-- **Spectral flatness** — near 1.0 means white-noise-like, not speech.
-- **SNR estimate** — compares loudest frames (speech) to quietest (noise floor).
-- **Duration** — must be at least 1 second.
+**Two separate checks, not one** (this distinction matters — reusing one check
+for both was a real bug where a genuinely noisy room passed the silence step):
+- **`check_ambient`** — the "please stay silent" step. Fails if the room is loud
+  (RMS floor) **or if any human voice is detected** (background chatter, someone
+  talking nearby).
+- **`check_speech`** — the pre/post voice step. Fails if the clip is too quiet,
+  too loud, clipped, or **does not contain enough actual speech** (needs ≥25%).
 
-**Output:** `{ok: true/false, reasons: [...], metrics: {...}}`
+**The key tool — Voice Activity Detection (Silero VAD):** a small (~1.8 MB),
+frozen, pretrained model whose only job is "is there a human voice here". Real
+background noise (fans, traffic, chatter, hums) cannot be reliably told apart
+from speech by hand-tuned spectral thresholds — the earlier version tried this
+and let a noisy room through. VAD solves exactly that narrow sub-problem, the
+same principle as Layer 2 using a frozen pretrained encoder. The `silero-vad`
+package bundles the weights, so it runs offline with no download.
 
-**Why no ML:** there is no dataset of "bad VR headset audio" to train on, and
-threshold rules are explainable and reliable. Using ML here would be weaker.
+**Output:** `{ok: true/false, reasons: [...], metrics: {duration_sec, rms,
+clip_ratio, speech_seconds, speech_fraction, speech_segments}}`
+
+**Why we did not train anything here:** VAD is a solved problem with an excellent
+free pretrained model; the surrounding decisions (loudness floor, clipping,
+speech fraction) are explainable rules. Training our own would be strictly worse.
 
 ---
 

@@ -20,14 +20,33 @@ MIN_DURATION_SEC = 1.0          # shorter clips are rejected by Layer 1
 MAX_DURATION_SEC = 35.0         # longer clips are trimmed
 
 # --------------------------------------------- layer 1: quality gate
-# Thresholds tuned for consumer microphones (phone / Quest 2 headset).
+# Two DIFFERENT checks, not one reused function: the ambient step expects
+# near-silence, the pre/post voice steps expect real speech. Using the
+# same pass/fail logic for both was the root cause of a genuinely noisy
+# room passing the ambient check - a same-clip "loud frames vs quiet
+# frames" ratio measures the noise's own fluctuation when there is no
+# speech to compare against, and real ambient noise (fans, traffic,
+# chatter) is usually tonal/structured rather than flat white noise, so
+# a flatness threshold tuned for hiss let it through undetected.
 QUALITY = {
-    "min_rms": 0.005,           # below = silence / mic muted
-    "max_rms": 0.5,             # above = mic overload
+    # sanity checks shared by both (independent of VAD)
     "max_clip_ratio": 0.01,     # >1% samples at digital ceiling = distortion
-    "max_flatness": 0.4,        # spectral flatness near 1 = noise, not speech
-    "min_snr_db": 10.0,         # speech must stand 10 dB above noise floor
+    # ambient step: room must be genuinely quiet AND contain no speech
+    "ambient_max_rms": 0.02,    # absolute noise floor ceiling
+    "ambient_max_speech_sec": 0.3,   # tolerance for a brief cough/click
+    # speech step: clip must contain enough actual voice to be scoreable
+    "speech_min_rms": 0.005,    # below = silence / mic muted
+    "speech_max_rms": 0.5,      # above = mic overload
+    "speech_min_fraction": 0.25,     # >=25% of the clip must be VAD speech
 }
+
+# Silero VAD: a small (~1.8MB), fast, pretrained voice-activity detector.
+# Used because arbitrary real-world noise (fans, traffic, background
+# chatter, hums) cannot be reliably distinguished from speech by hand-
+# tuned spectral thresholds - this is exactly the kind of narrow,
+# well-solved sub-problem a frozen pretrained model is the right tool
+# for, the same principle as Layer 2's frozen emotion encoder.
+VAD_THRESHOLD = 0.5   # Silero's own speech-probability decision boundary
 
 # --------------------------------------------- layer 2: stress model
 # The frozen encoder. plus_large = 300M params trained on 42,500 hours

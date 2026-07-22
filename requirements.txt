@@ -8,6 +8,7 @@ scikit-learn>=1.3
 librosa>=0.10            # loading, resampling, spectral features
 soundfile>=0.12          # wav read/write
 praat-parselmouth>=0.4.3 # clinical voice measures: F0, jitter, shimmer, HNR
+silero-vad>=5.1          # Layer 1 voice-activity detection (bundled weights)
 
 # --- frozen pretrained encoder (Layer 2 embedding branch) ---
 funasr>=1.1.4            # loads emotion2vec models

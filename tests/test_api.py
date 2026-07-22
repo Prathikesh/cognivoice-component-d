@@ -49,17 +49,31 @@ def test_health_reports_layer_status():
     assert layers["layer1_quality"] and layers["layer3_compare"]
 
 
-def test_ambient_check_accepts_clean_audio():
-    r = client.post("/ambient-check",
-                    files={"file": ("a.wav", wav_bytes(speech_like()),
-                                    "audio/wav")})
-    assert r.status_code == 200 and r.json()["ok"]
+def _patch_vad(monkeypatch, segments_fn):
+    """Replace the real Silero VAD so API tests need no model download.
+    Patches the module attribute check_ambient/check_speech resolve at
+    call time (they default vad_fn to None -> module speech_segments)."""
+    import src.layer1_quality as l1
+    monkeypatch.setattr(l1, "speech_segments", segments_fn)
 
 
-def test_ambient_check_rejects_silence():
-    silence = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
+def test_ambient_check_passes_quiet_room(monkeypatch):
+    # A quiet room with NO detected voice must pass the ambient check.
+    _patch_vad(monkeypatch, lambda audio, sr: [])
+    rng = np.random.RandomState(0)
+    quiet = (0.008 * rng.randn(SAMPLE_RATE * 3)).astype(np.float32)
     r = client.post("/ambient-check",
-                    files={"file": ("s.wav", wav_bytes(silence), "audio/wav")})
+                    files={"file": ("a.wav", wav_bytes(quiet), "audio/wav")})
+    assert r.status_code == 200 and r.json()["ok"], r.json()
+
+
+def test_ambient_check_rejects_background_voice(monkeypatch):
+    # Someone talking nearby -> VAD finds speech -> ambient must FAIL.
+    _patch_vad(monkeypatch, lambda audio, sr: [{"start": 0, "end": len(audio)}])
+    rng = np.random.RandomState(0)
+    quiet = (0.008 * rng.randn(SAMPLE_RATE * 3)).astype(np.float32)
+    r = client.post("/ambient-check",
+                    files={"file": ("s.wav", wav_bytes(quiet), "audio/wav")})
     assert r.status_code == 200 and not r.json()["ok"]
 
 

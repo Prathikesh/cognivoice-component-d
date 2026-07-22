@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from config import MODELS_DIR, SAMPLE_RATE
-from src.layer1_quality import check_quality
+from src.layer1_quality import check_ambient, check_speech
 from src.layer3_compare import compare_scores
 from src.layer4_crossmodal import (MockHRVProvider, StoredHRVProvider,
                                    validate_crossmodal)
@@ -119,10 +119,11 @@ def health():
 # ----------------------------------------------------------- layer 1
 @app.post("/ambient-check")
 async def ambient_check(file: UploadFile = File(...)):
-    """Standalone quality check - the app calls this while recording to
-    warn the user early about a bad environment."""
+    """The 'stay silent' step: room must be quiet AND free of speech
+    (checked via VAD, not the loudness-comparison heuristic /infer uses -
+    see src/layer1_quality.py for why these must be different checks)."""
     audio = await read_audio(file)
-    return check_quality(audio)
+    return check_ambient(audio)
 
 
 # ----------------------------------------------------------- layer 2
@@ -134,7 +135,7 @@ async def infer(file: UploadFile = File(...),
         raise HTTPException(503, "fusion model not trained yet")
     audio = await read_audio(file)
 
-    quality = check_quality(audio)
+    quality = check_speech(audio)
     if not quality["ok"]:
         # 422 tells the app: recording unusable, ask the user to retry.
         raise HTTPException(422, detail={"error": "audio rejected by layer 1",
