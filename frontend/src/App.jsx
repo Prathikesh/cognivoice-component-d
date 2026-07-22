@@ -1200,7 +1200,18 @@ function useAudioRecorder() {
     chunksRef.current = [];
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Disable the browser's call-optimised processing. Auto gain
+      // control normalises loudness and noise suppression reshapes the
+      // spectrum - both destroy the energy/prosody cues the stress model
+      // reads, and neither is applied to the training data. We want the
+      // raw voice, matching what the model was trained on.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
       streamRef.current = stream;
 
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
