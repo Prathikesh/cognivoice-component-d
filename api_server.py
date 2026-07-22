@@ -6,7 +6,13 @@ checkpoints disable their endpoint with a clean 503 (never a crash),
 so the system runs even before training is complete.
 
 Run (you will do this manually):
-  .venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8000
+  .venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8001
+
+Port 8001, not 8000: 8000 is a common clash point with other local dev
+servers, and on macOS a process bound specifically to 127.0.0.1 silently
+wins loopback traffic over a 0.0.0.0 bind - so a clash there fails
+invisibly (a different app answers) instead of a loud "port in use"
+error. This exact thing happened during development of this component.
 """
 
 import io
@@ -17,6 +23,7 @@ import librosa
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from config import MODELS_DIR, SAMPLE_RATE
@@ -64,6 +71,20 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="CogniVoice Component D", version="2.0",
               lifespan=lifespan)
+
+# The frontend (Vite dev server) and this API run on different ports,
+# which browsers treat as different origins - without this, every fetch
+# from the UI fails silently with a CORS error, even though curl/Postman
+# work fine (they don't enforce CORS). Wide open here because this is a
+# research demo on localhost; a real deployment should replace "*" with
+# the mobile app's / hosted demo site's exact origin(s).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 async def read_audio(file: UploadFile) -> np.ndarray:

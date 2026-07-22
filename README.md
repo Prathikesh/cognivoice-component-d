@@ -30,8 +30,9 @@ python3.12 -m venv .venv
 
 # train the fusion model -> use notebooks/colab_train.ipynb on Colab GPU
 
-# run the API server
-.venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8000
+# run the API server (8001, not 8000 - see api_server.py / App.jsx comments
+# on why: 8000 is a common clash point with other local dev servers)
+.venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8001
 
 # frontend demo (separate terminal, API server must already be running)
 cd frontend

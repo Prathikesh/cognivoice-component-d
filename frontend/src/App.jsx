@@ -912,7 +912,11 @@ import {
   XCircle,
 } from "lucide-react";
 
-const API_BASE = "http://localhost:8000";
+// 8001, not 8000: port 8000 is often already taken by other local dev
+// servers on this machine, and on macOS a process bound specifically to
+// 127.0.0.1 silently wins loopback traffic over one bound to 0.0.0.0 -
+// so a clash there fails invisibly instead of throwing "port in use".
+const API_BASE = "http://localhost:8001";
 const AMBIENT_RECORD_SECONDS = 8;
 const VOICE_RECORD_SECONDS = 30;
 
