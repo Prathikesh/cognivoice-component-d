@@ -32,7 +32,22 @@ python3.12 -m venv .venv
 
 # run the API server
 .venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8000
+
+# frontend demo (separate terminal, API server must already be running)
+cd frontend
+npm install
+npm run dev
 ```
+
+## Frontend
+
+`frontend/` is the panel-demo web UI, ported from the PP1 `cognify-ui`
+React app and rewired to the v2 API contract (session-id based, single
+`/full-session` call instead of three separate legacy calls). The final
+product is a mobile app; this web UI exists to demonstrate the component
+end to end. All API integration lives in a few functions in `App.jsx`
+(`analyzeAmbient`, `analyzeVoice`, `Processing.run`) - everything else
+(layout, animations, the TTS health-companion voice) is unchanged PP1 UI.
 
 ## Training pipeline (two stages)
 
