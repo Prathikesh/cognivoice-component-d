@@ -18,6 +18,7 @@ error. This exact thing happened during development of this component.
 import io
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import librosa
 import numpy as np
@@ -88,17 +89,38 @@ app.add_middleware(
 
 
 async def read_audio(file: UploadFile) -> np.ndarray:
-    """Decode any uploaded audio to 16 kHz mono float32."""
+    """Decode any uploaded audio to 16 kHz mono float32.
+
+    Two-stage decode: soundfile is fast but only handles WAV/FLAC/OGG,
+    so compressed uploads (MP3, M4A, WebM/Opus - which the UI offers and
+    which browser MediaRecorder often produces) fall back to librosa,
+    which decodes them via ffmpeg. Without this fallback every non-WAV
+    upload failed with 'could not decode audio file'.
+    """
     raw = await file.read()
+    # fast path: soundfile straight from memory (WAV/FLAC/OGG)
     try:
         audio, sr = sf.read(io.BytesIO(raw), dtype="float32")
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)      # stereo -> mono
+        if sr != SAMPLE_RATE:
+            audio = librosa.resample(audio, orig_sr=sr, target_sr=SAMPLE_RATE)
+        return audio
     except Exception:
-        raise HTTPException(400, "could not decode audio file")
-    if audio.ndim > 1:
-        audio = audio.mean(axis=1)          # stereo -> mono
-    if sr != SAMPLE_RATE:
-        audio = librosa.resample(audio, orig_sr=sr, target_sr=SAMPLE_RATE)
-    return audio
+        pass  # not a soundfile-supported format; try the ffmpeg path
+
+    # fallback: librosa via ffmpeg, from a temp file (handles mp3/m4a/webm)
+    import tempfile
+    suffix = Path(file.filename or "audio").suffix or ".bin"
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
+            tmp.write(raw)
+            tmp.flush()
+            audio, _ = librosa.load(tmp.name, sr=SAMPLE_RATE, mono=True)
+        return audio.astype(np.float32)
+    except Exception as e:
+        raise HTTPException(
+            400, f"could not decode audio file ({file.filename}): {e}")
 
 
 # ------------------------------------------------------------ health
